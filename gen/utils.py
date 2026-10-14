@@ -1,12 +1,20 @@
+true=True
+false=False
 short=int
 sbyte=int
 ubyte=int
 byte=int
 global calcBoolConditionwhenvarisval
 global callUsingThis
+global currentvars
+class ItemMethods:
+	def sellPrice(platinum=0,gold=0,silver=0,copper=0):
+		print("sellpric",platinum,gold,silver,copper)
+		return platinum*1000000+gold*10000+silver*100+copper
 class ItemHolder:
+	default=ItemHolder(0)
 	def __init__(this,typ):
-		this.type=typ
+		this.type:int=typ
 		this.knockBack:float=0#default value
 		this.scale:float=1
 		this.useSoundPitch:float=0#default value
@@ -18,7 +26,6 @@ class ItemHolder:
 		this.tooltipSlot:int=-1
 		this.fishingPole:int=1
 		this.bait:int=0#default value
-		this.type:int=0#default value
 		this.holdStyle:int=0#default value
 		this.useStyle:int=0#default value
 		this.useAnimation:int=0#default value
@@ -115,6 +122,7 @@ class ItemHolder:
 		this.hasVanityEffects:bool=False#default value
 		this.color:any=None#default value
 		this.UseSound:any=None#default value
+		this.Variant:any=-1#private set, public get
 	def SetDefaults1(self,typ):
 		x=getFunctionContents("Terraria.Item","void SetDefaults1(int type)")
 		return keepOnlyContentsWhen(x,"type",typ)[0]
@@ -128,21 +136,22 @@ class ItemHolder:
 		x=getFunctionContents("Terraria.Item","void SetDefaults4(int type)")
 		return keepOnlyContentsWhen(x,"type",typ)[0]
 	def SetDefaults5(self,typ):
-		print("z",typ)
 		x=getFunctionContents("Terraria.Item","void SetDefaults5(int type)")
-		y=keepOnlyContentsWhen(x,"type",typ)[0]
-		print(y)
-		return y
+		result=keepOnlyContentsWhen(x,"type",typ)
+		return result[0]
 		
 	def fromTypeInd(typ):
+		global tmpval
 		tmpval=ItemHolder(typ)
 		global calcBoolConditionwhenvarisval
+		global currentvars
+		currentvars={"x":None,"this":[tmpval][0],"true":True,"false":False,"Item":ItemMethods,"ItemID":ItemID,"null":None,"variant":None}
 		def calcBoolConditionwhenvarisvalLocal(varname,value,cond):
-			this=[tmpval][0]
+			global tmpval
+			global currentvars
 			try:
-				x=-1
-				exec("x=("+cond.replace("&&","&").replace("||","|").replace(varname,str(value))+")")
-				return x
+				exec("x=((("+cond.replace("&&",")&(").replace("||",")|(").replace(varname,str(value))+")))",{},currentvars)
+				return currentvars['x']
 			except KeyboardInterrupt as e:
 				raise e
 			except Exception:
@@ -150,25 +159,35 @@ class ItemHolder:
 		calcBoolConditionwhenvarisval=calcBoolConditionwhenvarisvalLocal
 		global callUsingThis
 		def callUsingThisLocal(what):
+			global tmpval
+			global currentvars
 			this=[tmpval][0]
-			
+			what=what.strip()
+			if(what[-1]=="f"):
+				if(what[-2] in "0123456789"):
+					what=what[:-1]
+			if(what[0:3]=="int"):
+				what=what[4:]
 			try:
-				x=None
-				exec("x="+what.strip())
+				if("this.type =" in what.strip()):
+					return None
+
+				exec("x="+what.strip(),{},currentvars)
+				tmpval=currentvars["this"]
 				if("SetDefaults" in what):
-					print("detdefasdafef",what,x)
-					return x
+					return currentvars['x']
 			except KeyboardInterrupt as e:
 				raise e
 			except Exception:
-				print("x="+what.strip())
 				return None
 			
 			return None;
 			
 		callUsingThis=callUsingThisLocal
 		x=getFunctionContents("Terraria.Item","void SetDefaults(int Type, ItemVariant variant = null)")
-		print(keepOnlyContentsWhen(x,"this.type",typ)[0])
+	
+		print(keepOnlyContentsWhen(x,"Type",typ))
+		return tmpval
 
 def findLinkedBracket(content,brackets={"[":"]","{":"}"},start=0):
 	"""
@@ -241,16 +260,15 @@ def keepOnlyContentsWhenSwitchStatement(block,varname,value,swc):
 	block=block[startind:]
 	c=0
 	while(c<block.__len__()):
-		#print(c)
-		ind1=block.find(";",c)
-		ind2=block.find("{",c)
+		ind1=[block.index(";",c) if ";" in block[c:] else -1][0]
+		ind2=[block.index("{",c) if "{" in block[c:] else -1][0]
 		if(block[c:c+4]=="case"):
 			c=block.index(":",c)+1
 		elif((ind1>=0)&((ind1<ind2)|(ind2<0))):
 			#; first, not a block
-			if(block[c:ind1]=="break"):
+			if(block[c:ind1].strip()=="break"):
 				break
-			if(block[c:ind1]=="return"):
+			if(block[c:ind1].strip()=="return"):
 				return [newcontents,True]
 			y=callUsingThis(block[c:ind1])
 			if(y!=None):
@@ -288,6 +306,7 @@ def keepOnlyContentsWhenSwitchStatement(block,varname,value,swc):
 				raise Exception()
 	return [newcontents,False]
 def keepOnlyContentsWhen(block,varname,value):
+	targetval=value
 	block="\n".join([i.strip() for i in block.split("\n")])
 	newcontents=""
 	c=0
@@ -375,6 +394,7 @@ class ItemID:
 class ItemID:
 	Count=6145
 	NumItemsInPrevVersion=5456
+	itemsByName={int(getVariable("Terraria.ID.ItemID","const short "+i).strip()):i for i in getVariablesOfType("Terraria.ID.ItemID","const short")}
 	class Sets:
 		DualEquipArmor=BoolListFromBoolSetCreator(getVariable("Terraria.ID.ItemID","public static bool[] DualEquipArmor"))
 		ReceivesDiagonalCorrectionAsFakeFish=BoolListFromBoolSetCreator(getVariable("Terraria.ID.ItemID","public static bool[] ReceivesDiagonalCorrectionAsFakeFish"))
@@ -473,5 +493,10 @@ for vt in vartypes:
 print(tmp.replace("\n","\nthis."))
 #getItemInitLines(3005)
 """
-ItemHolder.fromTypeInd(3005)
+y=ItemHolder.fromTypeInd(5456)
+v=vars(y)
+v2=vars(ItemHolder.default)
+print((5456 >= 1803) & (5456 <= 1807))
+print({i:v[i] for i in v if v[i]!=v2[i]})
+print(ItemID.itemsByName[5456])
 print("C:\\StuffAndThings\\itemportgen")
